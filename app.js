@@ -50,6 +50,9 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/admin", adminRoutes);
 
 app.use("/api/admin/profile", profileRoutes);
+app.use("/",(req, res)=>{
+  res.json({ message: "Welcome to the API" });
+});
 
 // 404 handler
 app.use((req, res, next) => {
