@@ -9,6 +9,7 @@ const { getActiveTemplateBySlug } = require("../constants/resumeTemplates");
 const { renderResumeHtml } = require("../utils/resumeHtml.renderer");
 const { getSignedDownloadUrl } = require("../utils/cloudinary");
 const { buildStarterResumeContent } = require("../constants/starterResumeContent");
+const { isPdfStale, regenerateResumePdf } = require("../utils/pdf.service");
 
 const createResume = async (req, res, next) => {
   try {
@@ -87,7 +88,17 @@ const updateResume = async (req, res, next) => {
       resume.templateSlug = req.body.templateSlug;
     }
 
-    const fields = ["personal", "education", "experience", "skills", "jobDescription", "status"];
+    const fields = [
+      "personal",
+      "education",
+      "experience",
+      "projects",
+      "skills",
+      "certifications",
+      "languages",
+      "jobDescription",
+      "status",
+    ];
     fields.forEach((field) => {
       if (req.body[field] !== undefined) {
         resume[field] = req.body[field];
@@ -143,7 +154,7 @@ const getResumePreviewHtml = async (req, res, next) => {
 
 const downloadResume = async (req, res, next) => {
   try {
-    const resume = await Resume.findOne({
+    let resume = await Resume.findOne({
       _id: req.params.id,
       userId: req.user._id,
     });
@@ -156,6 +167,12 @@ const downloadResume = async (req, res, next) => {
       return next(new ApiError("Payment required before download.", 403));
     }
 
+    let regenerated = false;
+    if (isPdfStale(resume)) {
+      resume = await regenerateResumePdf(resume);
+      regenerated = true;
+    }
+
     let downloadUrl = resume.pdfUrl;
     if (resume.pdfPublicId) {
       downloadUrl = getSignedDownloadUrl(resume.pdfPublicId);
@@ -164,7 +181,31 @@ const downloadResume = async (req, res, next) => {
     res.status(200).json(new ApiResponse(200, "Download URL generated", {
       downloadUrl,
       expiresInMinutes: 15,
+      regenerated,
     }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const regenerateResumePdfHandler = async (req, res, next) => {
+  try {
+    const resume = await Resume.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
+
+    if (!resume) {
+      return next(new ApiError("Resume not found.", 404));
+    }
+
+    if (resume.status !== "paid") {
+      return next(new ApiError("Payment required before regenerating PDF.", 403));
+    }
+
+    const updatedResume = await regenerateResumePdf(resume);
+
+    res.status(200).json(new ApiResponse(200, "PDF regenerated", { resume: updatedResume }));
   } catch (error) {
     next(error);
   }
@@ -190,5 +231,6 @@ module.exports = {
   deleteResume,
   getResumePreviewHtml,
   downloadResume,
+  regenerateResumePdfHandler,
   getPublicPricing,
 };

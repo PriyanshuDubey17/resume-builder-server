@@ -97,6 +97,15 @@ const verifyOtp = async (req, res, next) => {
     if (purpose === "register") {
       user.emailVerified = true;
       await user.save();
+
+      const accessToken = generateAccessToken(user);
+      const refreshToken = generateRefreshToken(user);
+      setCustomerTokenCookies(res, accessToken, refreshToken);
+
+      return res.status(200).json(new ApiResponse(200, "OTP verified successfully.", {
+        emailVerified: user.emailVerified,
+        user: getSafeUserPayload(user),
+      }));
     }
 
     res.status(200).json(new ApiResponse(200, "OTP verified successfully.", {

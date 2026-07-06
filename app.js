@@ -22,7 +22,8 @@ app.post(
   express.raw({ type: "application/json" }),
   (req, res, next) => {
     try {
-      req.body = JSON.parse(req.body.toString());
+      req.rawBody = req.body.toString();
+      req.body = JSON.parse(req.rawBody);
     } catch {
       return next(new ApiError("Invalid webhook payload", 400));
     }

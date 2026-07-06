@@ -1,12 +1,66 @@
 const Resume = require("../models/Resume");
 const Payment = require("../models/Payment");
+const User = require("../models/User");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const { getResumePricePaise } = require("../utils/pricingSettings");
 const { createOrder, verifyPaymentSignature, verifyWebhookSignature } = require("../utils/razorpay.utils");
 const { generateAndUploadResumePdf } = require("../utils/pdf.service");
+const { sendEmail } = require("../utils/email/email.service");
+const { buildPaymentSuccessEmailHtml } = require("../utils/email/paymentSuccess.template");
 
 const getResumePrice = getResumePricePaise;
+
+const sendPaymentSuccessEmail = async (payment, resume) => {
+  try {
+    const user = await User.findById(payment.userId);
+    if (!user?.email) return;
+
+    const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+    const downloadPageUrl = `${clientUrl}/builder/${resume._id}`;
+    const resumeName = resume.personal?.fullName?.trim() || "Your resume";
+    const amountInr = Math.round(payment.amount / 100);
+
+    await sendEmail({
+      to: user.email,
+      subject: "Your resume PDF is ready",
+      text: `Hi ${user.name || "there"}, your payment of ₹${amountInr} was successful. Download your resume: ${downloadPageUrl}`,
+      html: buildPaymentSuccessEmailHtml({
+        userName: user.name,
+        resumeName,
+        downloadPageUrl,
+        amountInr,
+      }),
+    });
+  } catch (error) {
+    console.error("Payment success email failed:", error.message);
+  }
+};
+
+const fulfillPayment = async (payment, razorpayPaymentId) => {
+  if (payment.status === "paid") {
+    return Resume.findById(payment.resumeId);
+  }
+
+  payment.status = "paid";
+  payment.razorpayPaymentId = razorpayPaymentId;
+  await payment.save();
+
+  const resume = await Resume.findById(payment.resumeId);
+  if (!resume) return null;
+
+  const { pdfUrl, pdfPublicId, pdfGeneratedAt } = await generateAndUploadResumePdf(resume);
+  resume.status = "paid";
+  resume.paymentId = payment._id;
+  resume.pdfUrl = pdfUrl;
+  resume.pdfPublicId = pdfPublicId;
+  resume.pdfGeneratedAt = pdfGeneratedAt;
+  await resume.save();
+
+  await sendPaymentSuccessEmail(payment, resume);
+
+  return resume;
+};
 
 const createPaymentOrder = async (req, res, next) => {
   try {
@@ -24,6 +78,27 @@ const createPaymentOrder = async (req, res, next) => {
     }
 
     const amount = await getResumePrice();
+
+    const existingPayment = await Payment.findOne({
+      resumeId: resume._id,
+      userId: req.user._id,
+      status: "created",
+    }).sort({ createdAt: -1 });
+
+    if (existingPayment) {
+      if (existingPayment.amount === amount) {
+        return res.status(200).json(new ApiResponse(200, "Order created", {
+          orderId: existingPayment.razorpayOrderId,
+          amount: existingPayment.amount,
+          currency: existingPayment.currency || "INR",
+          keyId: process.env.RAZORPAY_KEY_ID,
+        }));
+      }
+
+      existingPayment.status = "failed";
+      await existingPayment.save();
+    }
+
     const order = await createOrder({
       amount,
       currency: "INR",
@@ -48,24 +123,6 @@ const createPaymentOrder = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
-
-const fulfillPayment = async (payment, razorpayPaymentId) => {
-  payment.status = "paid";
-  payment.razorpayPaymentId = razorpayPaymentId;
-  await payment.save();
-
-  const resume = await Resume.findById(payment.resumeId);
-  if (!resume) return;
-
-  const { pdfUrl, pdfPublicId } = await generateAndUploadResumePdf(resume);
-  resume.status = "paid";
-  resume.paymentId = payment._id;
-  resume.pdfUrl = pdfUrl;
-  resume.pdfPublicId = pdfPublicId;
-  await resume.save();
-
-  return resume;
 };
 
 const verifyPayment = async (req, res, next) => {
@@ -95,13 +152,6 @@ const verifyPayment = async (req, res, next) => {
       return next(new ApiError("Payment record not found.", 404));
     }
 
-    if (payment.status === "paid") {
-      const resume = await Resume.findById(payment.resumeId);
-      return res.status(200).json(new ApiResponse(200, "Payment already verified", {
-        resume,
-      }));
-    }
-
     const resume = await fulfillPayment(payment, razorpayPaymentId);
 
     res.status(200).json(new ApiResponse(200, "Payment verified successfully", {
@@ -112,10 +162,36 @@ const verifyPayment = async (req, res, next) => {
   }
 };
 
+const getPaymentStatus = async (req, res, next) => {
+  try {
+    const resume = await Resume.findOne({
+      _id: req.params.resumeId,
+      userId: req.user._id,
+    });
+
+    if (!resume) {
+      return next(new ApiError("Resume not found.", 404));
+    }
+
+    const latestPayment = await Payment.findOne({
+      resumeId: resume._id,
+      userId: req.user._id,
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json(new ApiResponse(200, "Payment status fetched", {
+      resumeStatus: resume.status,
+      latestPaymentStatus: latestPayment?.status || null,
+      isPaid: resume.status === "paid",
+    }));
+  } catch (error) {
+    next(error);
+  }
+};
+
 const handleWebhook = async (req, res, next) => {
   try {
     const signature = req.headers["x-razorpay-signature"];
-    const rawBody = JSON.stringify(req.body);
+    const rawBody = req.rawBody;
 
     if (!verifyWebhookSignature(rawBody, signature)) {
       return next(new ApiError("Invalid webhook signature.", 400));
@@ -139,4 +215,9 @@ const handleWebhook = async (req, res, next) => {
   }
 };
 
-module.exports = { createPaymentOrder, verifyPayment, handleWebhook };
+module.exports = {
+  createPaymentOrder,
+  verifyPayment,
+  getPaymentStatus,
+  handleWebhook,
+};

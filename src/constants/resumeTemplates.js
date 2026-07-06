@@ -35,6 +35,24 @@ const RESUME_TEMPLATES = [
     category: "premium",
     sortOrder: 6,
   },
+  {
+    slug: "campus-starter",
+    name: "Campus Starter",
+    category: "student",
+    sortOrder: 7,
+  },
+  {
+    slug: "compact-pro",
+    name: "Compact Pro",
+    category: "experienced",
+    sortOrder: 8,
+  },
+  {
+    slug: "impact-metrics",
+    name: "Impact Metrics",
+    category: "business",
+    sortOrder: 9,
+  },
 ];
 
 const TEMPLATE_BY_SLUG = Object.fromEntries(

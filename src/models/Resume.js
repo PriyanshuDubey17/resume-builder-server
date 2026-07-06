@@ -146,6 +146,10 @@ const resumeSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    pdfGeneratedAt: {
+      type: Date,
+      default: null,
+    },
     lastEditedAt: {
       type: Date,
       default: Date.now,

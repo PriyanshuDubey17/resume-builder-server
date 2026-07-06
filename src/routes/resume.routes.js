@@ -9,6 +9,7 @@ const {
   deleteResume,
   getResumePreviewHtml,
   downloadResume,
+  regenerateResumePdfHandler,
   getPublicPricing,
 } = require("../controllers/resume.controller");
 
@@ -43,6 +44,7 @@ router.patch("/resumes/:id", validate(updateResumeSchema), updateResume);
 router.delete("/resumes/:id", deleteResume);
 router.get("/resumes/:id/preview-html", getResumePreviewHtml);
 router.get("/resumes/:id/download", downloadResume);
+router.post("/resumes/:id/regenerate-pdf", regenerateResumePdfHandler);
 router.post(
   "/resumes/:id/optimize",
   aiOptimizeLimiter,

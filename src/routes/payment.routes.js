@@ -4,6 +4,7 @@ const router = express.Router();
 const {
   createPaymentOrder,
   verifyPayment,
+  getPaymentStatus,
 } = require("../controllers/payment.controller");
 
 const { protectCustomer, authorizeRole } = require("../middlewares/auth.middleware");
@@ -13,5 +14,6 @@ router.use(protectCustomer, authorizeRole("customer"), requireEmailVerified);
 
 router.post("/create-order/:resumeId", createPaymentOrder);
 router.post("/verify", verifyPayment);
+router.get("/status/:resumeId", getPaymentStatus);
 
 module.exports = router;

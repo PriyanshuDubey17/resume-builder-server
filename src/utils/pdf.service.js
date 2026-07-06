@@ -54,7 +54,25 @@ const generateAndUploadResumePdf = async (resume) => {
   return {
     pdfUrl: result.secure_url,
     pdfPublicId: result.public_id,
+    pdfGeneratedAt: new Date(),
   };
 };
 
-module.exports = { generatePdfBuffer, generateAndUploadResumePdf };
+const isPdfStale = (resume) =>
+  Boolean(resume.pdfGeneratedAt && resume.lastEditedAt > resume.pdfGeneratedAt);
+
+const regenerateResumePdf = async (resume) => {
+  const { pdfUrl, pdfPublicId, pdfGeneratedAt } = await generateAndUploadResumePdf(resume);
+  resume.pdfUrl = pdfUrl;
+  resume.pdfPublicId = pdfPublicId;
+  resume.pdfGeneratedAt = pdfGeneratedAt;
+  await resume.save();
+  return resume;
+};
+
+module.exports = {
+  generatePdfBuffer,
+  generateAndUploadResumePdf,
+  isPdfStale,
+  regenerateResumePdf,
+};

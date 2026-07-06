@@ -251,6 +251,57 @@ const TEMPLATE_STYLES = {
     .cert-item { margin-bottom: 8px; }
     .skills, .languages { font-size: 11px; color: #18181B; margin-bottom: 8px; line-height: 1.5; }
   `,
+  "campus-starter": `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #000; max-width: 700px; margin: 0 auto; padding: 32px; }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    .contact-line { font-size: 10px; margin-bottom: 16px; color: #333; }
+    h2 { font-size: 12px; text-transform: uppercase; margin: 16px 0 8px; border-bottom: 1px solid #000; }
+    p, li { line-height: 1.45; }
+    .job { margin-bottom: 10px; }
+    .job-title { font-weight: bold; }
+    .edu-item { margin-bottom: 10px; }
+    .edu-item strong { display: block; font-size: 11px; }
+    ul { margin-left: 18px; }
+    .skills, .languages { font-size: 10px; margin-bottom: 8px; }
+    .meta { font-size: 10px; color: #555; }
+    .experience-muted .job-role { font-size: 10px; color: #666; }
+  `,
+  "compact-pro": `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Inter, Arial, sans-serif; font-size: 10.5px; color: #18181B; padding: 24px; max-width: 700px; margin: 0 auto; line-height: 1.35; }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 2px; }
+    .headline { font-size: 11px; color: #52525B; margin-bottom: 4px; }
+    .contact-line { font-size: 9.5px; color: #52525B; margin-bottom: 12px; }
+    h2 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #3F3F46; border-bottom: 1px solid #3F3F46; padding-bottom: 2px; margin: 12px 0 6px; }
+    .summary { line-height: 1.4; color: #52525B; margin-bottom: 6px; }
+    .job { margin-bottom: 8px; }
+    .job-header { display: flex; justify-content: space-between; font-weight: 600; font-size: 10.5px; }
+    .job-role { color: #52525B; font-weight: normal; font-size: 10px; margin: 1px 0 2px; }
+    .meta { font-size: 9.5px; color: #71717A; }
+    ul { margin: 2px 0 0 14px; }
+    li { margin-bottom: 2px; line-height: 1.35; }
+    .edu-item { margin-bottom: 6px; }
+    .cert-item { margin-bottom: 6px; }
+    .skills, .languages { font-size: 10.5px; margin-bottom: 6px; }
+  `,
+  "impact-metrics": `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Inter, Arial, sans-serif; font-size: 11px; color: #18181B; padding: 32px; max-width: 700px; margin: 0 auto; line-height: 1.45; }
+    h1 { font-size: 24px; font-weight: bold; margin-bottom: 4px; }
+    .contact-line { font-size: 10px; color: #52525B; margin-bottom: 16px; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #3F3F46; border-bottom: 2px solid #3F3F46; padding-bottom: 4px; margin: 16px 0 8px; }
+    .summary { line-height: 1.55; color: #52525B; margin-bottom: 4px; }
+    .job { margin-bottom: 12px; padding-left: 12px; border-left: 2px solid #3F3F46; }
+    .job-header { display: flex; justify-content: space-between; font-weight: 600; }
+    .job-role { color: #52525B; font-weight: normal; font-size: 11px; margin: 2px 0 4px; }
+    .meta { font-size: 10px; color: #52525B; margin-bottom: 4px; }
+    ul { margin: 4px 0 0 16px; }
+    li { margin-bottom: 3px; line-height: 1.45; }
+    .edu-item { margin-bottom: 8px; }
+    .cert-item { margin-bottom: 8px; }
+    .skills, .languages { font-size: 11px; margin-bottom: 8px; line-height: 1.5; }
+  `,
 };
 
 const renderModernProfessional = (resume) => {
@@ -437,6 +488,74 @@ const renderTechDeveloper = (resume) => {
   `;
 };
 
+const renderCampusStarter = (resume) => {
+  const { personal, education, experience, projects, skills, certifications, languages } = resume;
+  const contact = [
+    personal.email,
+    personal.phone,
+    personal.location,
+    ...renderPersonalLinks(personal).map((l) => l.replace(/^(LinkedIn|GitHub|Portfolio): /, "")),
+  ].filter(Boolean).map(escapeHtml).join(" | ");
+
+  return `
+    <h1>${escapeHtml(personal.fullName)}</h1>
+    <div class="contact-line">${contact}</div>
+    ${renderSummaryHtml(personal, "Summary")}
+    ${renderEducationHtml(education, "Education", "", "edu-item")}
+    ${renderProjectsHtml(projects, "Projects")}
+    ${renderSkillsInlineHtml(skills)}
+    <div class="experience-muted">${renderExperienceHtml(experience, "Experience")}</div>
+    ${renderCertificationsHtml(certifications)}
+    ${renderLanguagesHtml(languages)}
+  `;
+};
+
+const renderCompactPro = (resume) => {
+  const { personal, education, experience, projects, skills, certifications, languages } = resume;
+  const contact = [
+    personal.email,
+    personal.phone,
+    personal.location,
+    ...renderPersonalLinks(personal).map((l) => l.replace(/^(LinkedIn|GitHub|Portfolio): /, "")),
+  ].filter(Boolean).map(escapeHtml).join(" | ");
+  const latestRole = experience?.[0]?.role;
+
+  return `
+    <h1>${escapeHtml(personal.fullName)}</h1>
+    ${latestRole ? `<div class="headline">${escapeHtml(latestRole)}</div>` : ""}
+    <div class="contact-line">${contact}</div>
+    ${renderSummaryHtml(personal, "Summary")}
+    ${renderExperienceHtml(experience, "Experience")}
+    ${renderSkillsInlineHtml(skills)}
+    ${renderEducationHtml(education, "Education")}
+    ${renderProjectsHtml(projects, "Projects")}
+    ${renderCertificationsHtml(certifications)}
+    ${renderLanguagesHtml(languages)}
+  `;
+};
+
+const renderImpactMetrics = (resume) => {
+  const { personal, education, experience, projects, skills, certifications, languages } = resume;
+  const contact = [
+    personal.email,
+    personal.phone,
+    personal.location,
+    ...renderPersonalLinks(personal).map((l) => l.replace(/^(LinkedIn|GitHub|Portfolio): /, "")),
+  ].filter(Boolean).map(escapeHtml).join(" | ");
+
+  return `
+    <h1>${escapeHtml(personal.fullName)}</h1>
+    <div class="contact-line">${contact}</div>
+    ${renderSummaryHtml(personal, "Summary")}
+    ${renderExperienceHtml(experience, "Experience", "", "job")}
+    ${renderSkillsInlineHtml(skills)}
+    ${renderProjectsHtml(projects, "Projects")}
+    ${renderEducationHtml(education, "Education")}
+    ${renderCertificationsHtml(certifications)}
+    ${renderLanguagesHtml(languages)}
+  `;
+};
+
 const RENDERERS = {
   "modern-professional": renderModernProfessional,
   "minimal-ats": renderMinimalATS,
@@ -444,6 +563,9 @@ const RENDERERS = {
   "executive-classic": renderExecutiveClassic,
   "tech-developer": renderTechDeveloper,
   "ats-elite": renderAtsElite,
+  "campus-starter": renderCampusStarter,
+  "compact-pro": renderCompactPro,
+  "impact-metrics": renderImpactMetrics,
 };
 
 const renderResumeBody = (resume) => {
