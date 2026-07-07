@@ -6,7 +6,8 @@ const PDF_UPLOAD_FOLDER = "resume-builder/pdfs";
 const isServerless = () => Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 const launchServerlessBrowser = async () => {
-  const chromium = require("@sparticuz/chromium");
+  const chromiumModule = await import("@sparticuz/chromium");
+  const chromium = chromiumModule.default ?? chromiumModule;
   const puppeteer = require("puppeteer-core");
 
   chromium.setGraphicsMode = false;
