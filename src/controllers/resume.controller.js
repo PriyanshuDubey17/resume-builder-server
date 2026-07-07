@@ -1,4 +1,5 @@
 const Resume = require("../models/Resume");
+const axios = require("axios");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const {
@@ -183,19 +184,28 @@ const downloadResume = async (req, res, next) => {
       regenerated = true;
     }
 
-    let downloadUrl = resume.pdfUrl;
     const fileName = buildResumeFileName(resume);
-    if (resume.pdfPublicId) {
-      downloadUrl = getSignedDownloadUrl(resume.pdfPublicId, fileName);
+    const pdfSourceUrl = resume.pdfPublicId
+      ? getSignedDownloadUrl(resume.pdfPublicId)
+      : resume.pdfUrl;
+
+    const pdfResponse = await axios.get(pdfSourceUrl, {
+      responseType: "arraybuffer",
+      timeout: 30000,
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.setHeader("X-Download-Filename", fileName);
+    if (regenerated) {
+      res.setHeader("X-Pdf-Regenerated", "true");
     }
 
-    res.status(200).json(new ApiResponse(200, "Download URL generated", {
-      downloadUrl,
-      fileName,
-      expiresInMinutes: 15,
-      regenerated,
-    }));
+    res.send(Buffer.from(pdfResponse.data));
   } catch (error) {
+    if (error.response) {
+      return next(new ApiError("Failed to fetch PDF for download.", 502));
+    }
     next(error);
   }
 };

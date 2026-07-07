@@ -14,7 +14,8 @@ const corsOptions = {
       callback(new Error("Not allowed by CORS"));
     }
   },
-  credentials: true
+  credentials: true,
+  exposedHeaders: ["Content-Disposition", "X-Download-Filename", "X-Pdf-Regenerated"],
 };
 
 module.exports = corsOptions;
