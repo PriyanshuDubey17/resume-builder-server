@@ -11,6 +11,16 @@ const { getSignedDownloadUrl } = require("../utils/cloudinary");
 const { buildStarterResumeContent } = require("../constants/starterResumeContent");
 const { isPdfStale, regenerateResumePdf } = require("../utils/pdf.service");
 
+const buildResumeFileName = (resume) => {
+  const safeName = (resume.personal?.fullName || "resume")
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .slice(0, 80);
+
+  return `${safeName || "resume"}.pdf`;
+};
+
 const createResume = async (req, res, next) => {
   try {
     const { templateSlug } = req.body;
@@ -174,12 +184,14 @@ const downloadResume = async (req, res, next) => {
     }
 
     let downloadUrl = resume.pdfUrl;
+    const fileName = buildResumeFileName(resume);
     if (resume.pdfPublicId) {
-      downloadUrl = getSignedDownloadUrl(resume.pdfPublicId);
+      downloadUrl = getSignedDownloadUrl(resume.pdfPublicId, fileName);
     }
 
     res.status(200).json(new ApiResponse(200, "Download URL generated", {
       downloadUrl,
+      fileName,
       expiresInMinutes: 15,
       regenerated,
     }));

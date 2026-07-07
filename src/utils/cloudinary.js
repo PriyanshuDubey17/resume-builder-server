@@ -28,12 +28,13 @@ const createUploadSignature = (paramsToSign = {}) => {
   );
 };
 
-const getSignedDownloadUrl = (publicId) => {
+const getSignedDownloadUrl = (publicId, fileName = "resume.pdf") => {
   return cloudinary.url(publicId, {
     resource_type: "raw",
     type: "upload",
     sign_url: true,
     expires_at: Math.floor(Date.now() / 1000) + 15 * 60,
+    flags: `attachment:${fileName}`,
   });
 };
 
