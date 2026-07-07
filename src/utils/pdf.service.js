@@ -3,31 +3,47 @@ const { renderResumeHtml } = require("./resumeHtml.renderer");
 
 const PDF_UPLOAD_FOLDER = "resume-builder/pdfs";
 
-let browserInstance = null;
+const isServerless = () => Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
-const getBrowser = async () => {
-  if (!browserInstance) {
-    const puppeteer = require("puppeteer");
-    browserInstance = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+const launchBrowser = async () => {
+  if (isServerless()) {
+    const chromium = require("@sparticuz/chromium");
+    const puppeteer = require("puppeteer-core");
+
+    return puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
     });
   }
-  return browserInstance;
+
+  const puppeteer = require("puppeteer");
+  return puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
 };
 
 const generatePdfBuffer = async (resume) => {
   const html = renderResumeHtml(resume, false);
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: "networkidle0" });
-  const pdfBuffer = await page.pdf({
-    format: "A4",
-    printBackground: true,
-    margin: { top: "0", right: "0", bottom: "0", left: "0" },
-  });
-  await page.close();
-  return pdfBuffer;
+  const browser = await launchBrowser();
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "domcontentloaded" });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "0", right: "0", bottom: "0", left: "0" },
+    });
+    await page.close();
+    return pdfBuffer;
+  } catch (error) {
+    throw new Error(`PDF generation failed: ${error.message}`);
+  } finally {
+    await browser.close();
+  }
 };
 
 const uploadPdfToCloudinary = (pdfBuffer, resumeId) => {
@@ -49,13 +65,17 @@ const uploadPdfToCloudinary = (pdfBuffer, resumeId) => {
 };
 
 const generateAndUploadResumePdf = async (resume) => {
-  const pdfBuffer = await generatePdfBuffer(resume);
-  const result = await uploadPdfToCloudinary(pdfBuffer, resume._id);
-  return {
-    pdfUrl: result.secure_url,
-    pdfPublicId: result.public_id,
-    pdfGeneratedAt: new Date(),
-  };
+  try {
+    const pdfBuffer = await generatePdfBuffer(resume);
+    const result = await uploadPdfToCloudinary(pdfBuffer, resume._id);
+    return {
+      pdfUrl: result.secure_url,
+      pdfPublicId: result.public_id,
+      pdfGeneratedAt: new Date(),
+    };
+  } catch (error) {
+    throw new Error(`PDF generation failed: ${error.message}`);
+  }
 };
 
 const isPdfStale = (resume) =>

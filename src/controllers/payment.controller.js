@@ -11,6 +11,12 @@ const { buildPaymentSuccessEmailHtml } = require("../utils/email/paymentSuccess.
 
 const getResumePrice = getResumePricePaise;
 
+const isResumeFulfilled = (resume) =>
+  resume?.status === "paid" && Boolean(resume?.pdfUrl);
+
+const needsFulfillment = (payment, resume) =>
+  Boolean(payment && resume && !isResumeFulfilled(resume));
+
 const sendPaymentSuccessEmail = async (payment, resume) => {
   try {
     const user = await User.findById(payment.userId);
@@ -38,24 +44,30 @@ const sendPaymentSuccessEmail = async (payment, resume) => {
 };
 
 const fulfillPayment = async (payment, razorpayPaymentId) => {
-  if (payment.status === "paid") {
-    return Resume.findById(payment.resumeId);
-  }
-
-  payment.status = "paid";
-  payment.razorpayPaymentId = razorpayPaymentId;
-  await payment.save();
-
   const resume = await Resume.findById(payment.resumeId);
   if (!resume) return null;
 
+  if (isResumeFulfilled(resume)) {
+    return resume;
+  }
+
   const { pdfUrl, pdfPublicId, pdfGeneratedAt } = await generateAndUploadResumePdf(resume);
+
   resume.status = "paid";
   resume.paymentId = payment._id;
   resume.pdfUrl = pdfUrl;
   resume.pdfPublicId = pdfPublicId;
   resume.pdfGeneratedAt = pdfGeneratedAt;
   await resume.save();
+
+  if (payment.status !== "paid") {
+    payment.status = "paid";
+    payment.razorpayPaymentId = razorpayPaymentId;
+    await payment.save();
+  } else if (razorpayPaymentId && !payment.razorpayPaymentId) {
+    payment.razorpayPaymentId = razorpayPaymentId;
+    await payment.save();
+  }
 
   await sendPaymentSuccessEmail(payment, resume);
 
@@ -73,7 +85,7 @@ const createPaymentOrder = async (req, res, next) => {
       return next(new ApiError("Resume not found.", 404));
     }
 
-    if (resume.status === "paid") {
+    if (isResumeFulfilled(resume)) {
       return next(new ApiError("This resume is already paid.", 400));
     }
 
@@ -154,6 +166,12 @@ const verifyPayment = async (req, res, next) => {
 
     const resume = await fulfillPayment(payment, razorpayPaymentId);
 
+    if (!resume || !isResumeFulfilled(resume)) {
+      return next(
+        new ApiError("Payment received but PDF generation failed. Please retry.", 500),
+      );
+    }
+
     res.status(200).json(new ApiResponse(200, "Payment verified successfully", {
       resume,
     }));
@@ -164,7 +182,7 @@ const verifyPayment = async (req, res, next) => {
 
 const getPaymentStatus = async (req, res, next) => {
   try {
-    const resume = await Resume.findOne({
+    let resume = await Resume.findOne({
       _id: req.params.resumeId,
       userId: req.user._id,
     });
@@ -178,10 +196,24 @@ const getPaymentStatus = async (req, res, next) => {
       userId: req.user._id,
     }).sort({ createdAt: -1 });
 
+    if (latestPayment?.status === "paid" && needsFulfillment(latestPayment, resume)) {
+      try {
+        const fulfilledResume = await fulfillPayment(
+          latestPayment,
+          latestPayment.razorpayPaymentId,
+        );
+        if (fulfilledResume) {
+          resume = fulfilledResume;
+        }
+      } catch (error) {
+        console.error("Auto-recover fulfillment failed:", error.message);
+      }
+    }
+
     res.status(200).json(new ApiResponse(200, "Payment status fetched", {
       resumeStatus: resume.status,
       latestPaymentStatus: latestPayment?.status || null,
-      isPaid: resume.status === "paid",
+      isPaid: isResumeFulfilled(resume),
     }));
   } catch (error) {
     next(error);
@@ -204,8 +236,11 @@ const handleWebhook = async (req, res, next) => {
       const paymentId = paymentEntity?.id;
 
       const payment = await Payment.findOne({ razorpayOrderId: orderId });
-      if (payment && payment.status !== "paid") {
-        await fulfillPayment(payment, paymentId);
+      if (payment) {
+        const resume = await Resume.findById(payment.resumeId);
+        if (needsFulfillment(payment, resume)) {
+          await fulfillPayment(payment, paymentId);
+        }
       }
     }
 
@@ -220,4 +255,7 @@ module.exports = {
   verifyPayment,
   getPaymentStatus,
   handleWebhook,
+  fulfillPayment,
+  isResumeFulfilled,
+  needsFulfillment,
 };
