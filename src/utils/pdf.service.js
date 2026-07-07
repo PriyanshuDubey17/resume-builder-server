@@ -5,24 +5,42 @@ const PDF_UPLOAD_FOLDER = "resume-builder/pdfs";
 
 const isServerless = () => Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
-const launchBrowser = async () => {
-  if (isServerless()) {
-    const chromium = require("@sparticuz/chromium");
-    const puppeteer = require("puppeteer-core");
+const launchServerlessBrowser = async () => {
+  const chromium = require("@sparticuz/chromium");
+  const puppeteer = require("puppeteer-core");
 
-    return puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    });
-  }
+  chromium.setGraphicsMode = false;
 
-  const puppeteer = require("puppeteer");
   return puppeteer.launch({
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
+    headless: chromium.headless,
+  });
+};
+
+const launchLocalBrowser = async () => {
+  const puppeteer = require("puppeteer");
+  const launchOptions = {
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  };
+
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  } else {
+    // Use installed Google Chrome when Puppeteer's bundled browser is not cached.
+    launchOptions.channel = "chrome";
+  }
+
+  return puppeteer.launch(launchOptions);
+};
+
+const launchBrowser = async () => {
+  if (isServerless()) {
+    return launchServerlessBrowser();
+  }
+  return launchLocalBrowser();
 };
 
 const generatePdfBuffer = async (resume) => {
