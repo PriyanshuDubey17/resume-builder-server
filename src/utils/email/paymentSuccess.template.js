@@ -4,7 +4,7 @@ const buildPaymentSuccessEmailHtml = ({ userName, resumeName, downloadPageUrl, a
 
   return `
     <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2 style="color: #A13625;">Resume Builder</h2>
+      <h2 style="color: #A13625;">Resume AI ATS</h2>
       <p>Hi ${displayName},</p>
       <p>Your payment of <strong>₹${amountInr}</strong> was successful. <strong>${displayResume}</strong> is ready to download.</p>
       <p>
