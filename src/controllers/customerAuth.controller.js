@@ -42,19 +42,21 @@ const register = async (req, res, next) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    await User.create({
+    const user = await User.create({
       name,
       email,
       passwordHash,
       role: "customer",
-      emailVerified: false,
+      emailVerified: true,
     });
 
-    await sendOtpEmail(email, "register");
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    setCustomerTokenCookies(res, accessToken, refreshToken);
 
     res.status(201).json(
-      new ApiResponse(201, "Account created. Please verify your email with the OTP sent.", {
-        email,
+      new ApiResponse(201, "Account created successfully.", {
+        user: getSafeUserPayload(user),
       }),
     );
   } catch (error) {
