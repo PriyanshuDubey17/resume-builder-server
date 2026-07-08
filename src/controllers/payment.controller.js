@@ -315,6 +315,14 @@ const getPaymentStatus = async (req, res, next) => {
       }
     }
 
+    if (latestPayment?.status === "paid" && isResumeFulfilled(resume)) {
+      setThankYouAccessCookie(res, {
+        userId: req.user._id,
+        resumeId: resume._id,
+        paymentId: latestPayment._id,
+      });
+    }
+
     res.status(200).json(new ApiResponse(200, "Payment status fetched", {
       resumeStatus: resume.status,
       latestPaymentStatus: latestPayment?.status || null,
