@@ -5,6 +5,7 @@ const {
   createPaymentOrder,
   verifyPayment,
   getPaymentStatus,
+  getThankYouContext,
 } = require("../controllers/payment.controller");
 
 const { protectCustomer, authorizeRole } = require("../middlewares/auth.middleware");
@@ -15,5 +16,6 @@ router.use(protectCustomer, authorizeRole("customer"), requireEmailVerified);
 router.post("/create-order/:resumeId", createPaymentOrder);
 router.post("/verify", verifyPayment);
 router.get("/status/:resumeId", getPaymentStatus);
+router.get("/thank-you-context", getThankYouContext);
 
 module.exports = router;
