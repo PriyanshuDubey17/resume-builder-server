@@ -2,7 +2,7 @@ const Resume = require("../models/Resume");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const { getFreeAiLimit } = require("../utils/pricingSettings");
-const { optimizeResumeWithGemini } = require("../utils/ai/gemini.service");
+const { optimizeResumeWithGroq } = require("../utils/ai/groq.service");
 
 const optimizeResume = async (req, res, next) => {
   try {
@@ -25,7 +25,7 @@ const optimizeResume = async (req, res, next) => {
       );
     }
 
-    const result = await optimizeResumeWithGemini(resume, jobDescription);
+    const result = await optimizeResumeWithGroq(resume, jobDescription);
 
     resume.jobDescription = jobDescription;
     resume.aiMeta = {
