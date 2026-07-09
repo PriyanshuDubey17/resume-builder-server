@@ -1,3 +1,4 @@
+const pdfParse = require("pdf-parse");
 const ApiError = require("../ApiError");
 const {
   MAX_PDF_PAGES,
@@ -5,40 +6,29 @@ const {
   MAX_EXTRACTED_CHARS,
 } = require("../../constants/resumeImport");
 
-let pdfParseModule = null;
+const normalizeExtractedText = (rawText) =>
+  (rawText || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
-function ensurePdfParseModule() {
-  if (pdfParseModule) {
-    return pdfParseModule;
-  }
-
-  try {
-    require("@napi-rs/canvas");
-  } catch {
-    // pdf-parse can still load; import route may fail without canvas on some runtimes
-  }
-
-  pdfParseModule = require("pdf-parse");
-  return pdfParseModule;
-}
-
-const mapPdfParseError = (error, { PasswordException, InvalidPDFException, FormatError }) => {
-  if (process.env.NODE_ENV !== "production") {
-    console.error("[pdfTextExtractor]", error?.name || "Error", error?.message || error);
-  }
-
-  if (error instanceof PasswordException) {
-    return new ApiError("Password-protected PDFs are not supported.", 400);
-  }
-
-  if (error instanceof InvalidPDFException || error instanceof FormatError) {
-    return new ApiError("Invalid or corrupted PDF file.", 400);
-  }
+const mapPdfParseError = (error) => {
+  console.error("[resume-import] pdf-parse:", error?.name || "Error", error?.message || error);
 
   const message = (error?.message || "").toLowerCase();
 
   if (message.includes("password") || message.includes("encrypted")) {
     return new ApiError("Password-protected PDFs are not supported.", 400);
+  }
+
+  if (
+    message.includes("invalid pdf") ||
+    message.includes("corrupt") ||
+    message.includes("format error") ||
+    message.includes("xref")
+  ) {
+    return new ApiError("Invalid or corrupted PDF file.", 400);
   }
 
   return new ApiError(
@@ -52,24 +42,15 @@ const extractTextFromPdfBuffer = async (buffer) => {
     throw new ApiError("Invalid file.", 400);
   }
 
-  const { PDFParse, PasswordException, InvalidPDFException, FormatError } =
-    ensurePdfParseModule();
-
-  let parser;
   try {
-    parser = new PDFParse({ data: buffer });
-    const result = await parser.getText();
+    const result = await pdfParse(buffer);
 
-    const pageCount = result.total || 0;
+    const pageCount = result.numpages || 0;
     if (pageCount > MAX_PDF_PAGES) {
       throw new ApiError(`PDF must be ${MAX_PDF_PAGES} pages or fewer.`, 400);
     }
 
-    const rawText = (result.text || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/[ \t]+/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+    const rawText = normalizeExtractedText(result.text);
     const charCount = rawText.length;
 
     if (charCount < MIN_EXTRACTED_CHARS) {
@@ -97,11 +78,7 @@ const extractTextFromPdfBuffer = async (buffer) => {
     if (error instanceof ApiError) {
       throw error;
     }
-    throw mapPdfParseError(error, { PasswordException, InvalidPDFException, FormatError });
-  } finally {
-    if (parser) {
-      await parser.destroy().catch(() => {});
-    }
+    throw mapPdfParseError(error);
   }
 };
 

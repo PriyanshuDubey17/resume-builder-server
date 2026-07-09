@@ -30,6 +30,9 @@ const parseResumeImport = async (req, res, next) => {
       }),
     );
   } catch (error) {
+    if (!(error instanceof ApiError)) {
+      console.error("[resume-import] parse failed:", error?.message || error);
+    }
     next(error);
   }
 };
