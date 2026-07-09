@@ -1,9 +1,3 @@
-const {
-  PDFParse,
-  PasswordException,
-  InvalidPDFException,
-  FormatError,
-} = require("pdf-parse");
 const ApiError = require("../ApiError");
 const {
   MAX_PDF_PAGES,
@@ -11,7 +5,24 @@ const {
   MAX_EXTRACTED_CHARS,
 } = require("../../constants/resumeImport");
 
-const mapPdfParseError = (error) => {
+let pdfParseModule = null;
+
+function ensurePdfParseModule() {
+  if (pdfParseModule) {
+    return pdfParseModule;
+  }
+
+  try {
+    require("@napi-rs/canvas");
+  } catch {
+    // pdf-parse can still load; import route may fail without canvas on some runtimes
+  }
+
+  pdfParseModule = require("pdf-parse");
+  return pdfParseModule;
+}
+
+const mapPdfParseError = (error, { PasswordException, InvalidPDFException, FormatError }) => {
   if (process.env.NODE_ENV !== "production") {
     console.error("[pdfTextExtractor]", error?.name || "Error", error?.message || error);
   }
@@ -40,6 +51,9 @@ const extractTextFromPdfBuffer = async (buffer) => {
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw new ApiError("Invalid file.", 400);
   }
+
+  const { PDFParse, PasswordException, InvalidPDFException, FormatError } =
+    ensurePdfParseModule();
 
   let parser;
   try {
@@ -83,7 +97,7 @@ const extractTextFromPdfBuffer = async (buffer) => {
     if (error instanceof ApiError) {
       throw error;
     }
-    throw mapPdfParseError(error);
+    throw mapPdfParseError(error, { PasswordException, InvalidPDFException, FormatError });
   } finally {
     if (parser) {
       await parser.destroy().catch(() => {});

@@ -14,6 +14,7 @@
   "author": "Priyanshu Dubey",
   "license": "ISC",
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.100",
     "@sendgrid/mail": "^8.1.6",
     "@sparticuz/chromium": "^149.0.0",
     "axios": "^1.13.2",
