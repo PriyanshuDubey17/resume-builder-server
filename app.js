@@ -3,6 +3,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const corsOptions = require("./src/config/cors");
 const errorHandler = require("./src/middlewares/errorHandler");
+const connectDB = require("./src/config/db");
 const ApiError = require("./src/utils/ApiError");
 const app = express();
 const cookieParser = require("cookie-parser");
@@ -15,6 +16,15 @@ app.use(
   }),
 );
 app.use(cors(corsOptions));
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 const { handleWebhook } = require("./src/controllers/payment.controller");
 app.post(

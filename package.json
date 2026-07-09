@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "backfill:admin-pin": "node scripts/backfillAdminPin.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('npx puppeteer browsers install chrome',{stdio:'inherit'})}\""
   },
   "keywords": [
     "resume-builder"
