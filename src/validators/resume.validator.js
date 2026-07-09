@@ -2,6 +2,7 @@ const { z } = require("zod");
 const ApiError = require("../utils/ApiError");
 const { sanitizeResumeData } = require("../utils/sanitize.utils");
 const { ALLOWED_TEMPLATE_SLUGS } = require("../constants/resumeTemplates");
+const { importedResumeDataSchema } = require("../utils/import/normalizeImportedResume");
 const personalSchema = z.object({
   fullName: z.string().max(120).optional().default(""),
   email: z.string().max(120).optional().default(""),
@@ -63,9 +64,29 @@ const templateSlugSchema = z.enum(ALLOWED_TEMPLATE_SLUGS, {
   errorMap: () => ({ message: "Invalid template." }),
 });
 
-const createResumeSchema = z.object({
-  templateSlug: templateSlugSchema,
-});
+const createResumeSchema = z
+  .object({
+    templateSlug: templateSlugSchema,
+    source: z.enum(["starter", "import"]).optional().default("starter"),
+    importedData: importedResumeDataSchema.optional(),
+    importFileName: z.string().max(200).optional().default(""),
+  })
+  .superRefine((data, ctx) => {
+    if (data.source === "import" && !data.importedData) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "importedData is required when source is import.",
+        path: ["importedData"],
+      });
+    }
+    if (data.source === "starter" && data.importedData) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "importedData is not allowed when source is starter.",
+        path: ["importedData"],
+      });
+    }
+  });
 
 const updateResumeSchema = z.object({
   templateSlug: templateSlugSchema.optional(),  status: z.enum(["draft", "completed"]).optional(),
@@ -77,6 +98,11 @@ const updateResumeSchema = z.object({
   certifications: z.array(certificationItemSchema).optional(),
   languages: z.array(languageItemSchema).optional(),
   jobDescription: z.string().max(10000).optional(),
+});
+
+const applyImportSchema = z.object({
+  importedData: importedResumeDataSchema,
+  importFileName: z.string().max(200).optional().default(""),
 });
 
 const optimizeSchema = z.object({
@@ -111,6 +137,8 @@ const validate = (schema) => (req, _res, next) => {
 module.exports = {
   createResumeSchema,
   updateResumeSchema,
+  applyImportSchema,
   optimizeSchema,
+  importedResumeDataSchema,
   validate,
 };

@@ -44,13 +44,17 @@ const launchBrowser = async () => {
   return launchLocalBrowser();
 };
 
-const generatePdfBuffer = async (resume) => {
-  const html = renderResumeHtml(resume, false);
+const generatePdfBuffer = async (resume, showWatermark = false) => {
+  const html = renderResumeHtml(resume, showWatermark);
   const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "domcontentloaded" });
+    try {
+      await page.setContent(html, { waitUntil: "networkidle0", timeout: 15000 });
+    } catch {
+      await page.setContent(html, { waitUntil: "domcontentloaded" });
+    }
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
@@ -109,9 +113,36 @@ const regenerateResumePdf = async (resume) => {
   return resume;
 };
 
+const PREVIEW_PDF_FOLDER = "resume-builder/preview-pdfs";
+
+const uploadPreviewPdf = (pdfBuffer, resumeId) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: PREVIEW_PDF_FOLDER,
+        resource_type: "raw",
+        format: "pdf",
+        public_id: `preview-${resumeId}-${Date.now()}`,
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve({
+          previewPdfUrl: result.secure_url,
+          previewPdfPublicId: result.public_id,
+        });
+      },
+    );
+    uploadStream.end(pdfBuffer);
+  });
+};
+
+const generatePreviewPdfBuffer = async (resume) => generatePdfBuffer(resume, true);
+
 module.exports = {
   generatePdfBuffer,
   generateAndUploadResumePdf,
   isPdfStale,
   regenerateResumePdf,
+  generatePreviewPdfBuffer,
+  uploadPreviewPdf,
 };

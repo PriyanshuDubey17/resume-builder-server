@@ -76,6 +76,28 @@ const aiOptimizeLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const previewPdfLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: {
+    success: false,
+    message: "Too many preview PDF requests. Please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const importParseLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    message: "Too many PDF import requests. Please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 module.exports = {
   otpSendLimiter,
   otpVerifyLimiter,
@@ -83,4 +105,6 @@ module.exports = {
   profileSensitiveLimiter,
   enquirySubmitLimiter,
   aiOptimizeLimiter,
+  previewPdfLimiter,
+  importParseLimiter,
 };

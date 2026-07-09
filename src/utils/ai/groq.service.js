@@ -88,11 +88,25 @@ const normalizeParsedResult = (parsed) => {
   const experience = Array.isArray(suggestions.experience) ? suggestions.experience : [];
   const atsScore = parsed.atsScore || {};
 
+  const dedupeSkillStrings = (items) => {
+    const seen = new Set();
+    return items
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+      .filter((item) => {
+        const key = item.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  };
+
   const normalized = {
     suggestions: {
       skills: {
-        add: Array.isArray(skills.add) ? skills.add.filter((item) => typeof item === "string") : [],
-        remove: Array.isArray(skills.remove) ? skills.remove.filter((item) => typeof item === "string") : [],
+        add: dedupeSkillStrings(Array.isArray(skills.add) ? skills.add : []),
+        remove: dedupeSkillStrings(Array.isArray(skills.remove) ? skills.remove : []),
       },
       summary: {
         original: typeof summary.original === "string" ? summary.original : "",

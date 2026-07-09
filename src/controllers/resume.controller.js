@@ -10,7 +10,10 @@ const { getActiveTemplateBySlug } = require("../constants/resumeTemplates");
 const { renderResumeHtml } = require("../utils/resumeHtml.renderer");
 const { getSignedDownloadUrl } = require("../utils/cloudinary");
 const { buildStarterResumeContent } = require("../constants/starterResumeContent");
-const { isPdfStale, regenerateResumePdf } = require("../utils/pdf.service");
+const { normalizeImportedResume } = require("../utils/import/normalizeImportedResume");
+const { isPdfStale, regenerateResumePdf, generatePreviewPdfBuffer, uploadPreviewPdf } = require("../utils/pdf.service");
+const { analyzeResumeAts } = require("../utils/ats/atsAnalyzer");
+const { RESUME_TEMPLATES } = require("../constants/resumeTemplates");
 
 const buildResumeFileName = (resume) => {
   const safeName = (resume.personal?.fullName || "resume")
@@ -24,26 +27,50 @@ const buildResumeFileName = (resume) => {
 
 const createResume = async (req, res, next) => {
   try {
-    const { templateSlug } = req.body;
+    const { templateSlug, source = "starter", importedData, importFileName = "" } = req.body;
 
     const template = getActiveTemplateBySlug(templateSlug);
     if (!template) {
       return next(new ApiError("Invalid or inactive template.", 400));
     }
 
-    const starter = buildStarterResumeContent(req.user);
-
-    const resume = await Resume.create({
+    let resumePayload = {
       userId: req.user._id,
       templateSlug,
-      personal: starter.personal,
-      education: starter.education,
-      experience: starter.experience,
-      projects: starter.projects,
-      skills: starter.skills,
-      certifications: starter.certifications,
-      languages: starter.languages,
-    });
+    };
+
+    if (source === "import") {
+      const { data: normalized } = normalizeImportedResume(importedData);
+      resumePayload = {
+        ...resumePayload,
+        personal: normalized.personal,
+        education: normalized.education,
+        experience: normalized.experience,
+        projects: normalized.projects,
+        skills: normalized.skills,
+        certifications: normalized.certifications,
+        languages: normalized.languages,
+        importMeta: {
+          source: "pdf",
+          importedAt: new Date(),
+          fileName: (importFileName || "").trim().slice(0, 200),
+        },
+      };
+    } else {
+      const starter = buildStarterResumeContent(req.user);
+      resumePayload = {
+        ...resumePayload,
+        personal: starter.personal,
+        education: starter.education,
+        experience: starter.experience,
+        projects: starter.projects,
+        skills: starter.skills,
+        certifications: starter.certifications,
+        languages: starter.languages,
+      };
+    }
+
+    const resume = await Resume.create(resumePayload);
 
     res.status(201).json(new ApiResponse(201, "Resume created", { resume }));
   } catch (error) {
@@ -112,7 +139,16 @@ const updateResume = async (req, res, next) => {
     ];
     fields.forEach((field) => {
       if (req.body[field] !== undefined) {
-        resume[field] = req.body[field];
+        if (field === "skills" && Array.isArray(req.body.skills)) {
+          resume.skills = req.body.skills
+            .map((skill) => ({
+              name: (skill?.name || "").trim(),
+              level: (skill?.level || "").trim(),
+            }))
+            .filter((skill) => skill.name.length > 0);
+        } else {
+          resume[field] = req.body[field];
+        }
       }
     });
 
@@ -153,7 +189,8 @@ const getResumePreviewHtml = async (req, res, next) => {
       return next(new ApiError("Resume not found.", 404));
     }
 
-    const showWatermark = resume.status !== "paid";
+    const showWatermark =
+      req.query.variant === "download" ? false : resume.status !== "paid";
     const html = renderResumeHtml(resume, showWatermark);
 
     res.setHeader("Content-Type", "text/html");
@@ -245,6 +282,186 @@ const getPublicPricing = async (_req, res, next) => {
   }
 };
 
+const getResumeTemplates = async (_req, res, next) => {
+  try {
+    const templates = [...RESUME_TEMPLATES].sort((a, b) => {
+      const tierOrder = { A: 0, B: 1, C: 2 };
+      const tierDiff = (tierOrder[a.atsTier] ?? 9) - (tierOrder[b.atsTier] ?? 9);
+      if (tierDiff !== 0) return tierDiff;
+      return (b.atsStaticScore || 0) - (a.atsStaticScore || 0);
+    });
+    res.status(200).json(new ApiResponse(200, "Templates fetched", { templates }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAtsScore = async (req, res, next) => {
+  try {
+    const resume = await Resume.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
+
+    if (!resume) {
+      return next(new ApiError("Resume not found.", 404));
+    }
+
+    const analysis = analyzeResumeAts(resume);
+    res.status(200).json(new ApiResponse(200, "ATS score calculated", { ats: analysis }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const clearStarterContent = async (req, res, next) => {
+  try {
+    const resume = await Resume.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
+
+    if (!resume) {
+      return next(new ApiError("Resume not found.", 404));
+    }
+
+    resume.personal = {
+      fullName: resume.personal?.fullName || "",
+      email: resume.personal?.email || "",
+      phone: "",
+      location: "",
+      linkedin: "",
+      github: "",
+      portfolio: "",
+      summary: "",
+    };
+    resume.education = [];
+    resume.experience = [];
+    resume.projects = [];
+    resume.skills = [];
+    resume.certifications = [];
+    resume.languages = [];
+    resume.lastEditedAt = new Date();
+    await resume.save();
+
+    res.status(200).json(new ApiResponse(200, "Example content cleared", { resume }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const generatePreviewPdf = async (req, res, next) => {
+  try {
+    const resume = await Resume.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
+
+    if (!resume) {
+      return next(new ApiError("Resume not found.", 404));
+    }
+
+    if (resume.status === "paid") {
+      return next(new ApiError("Use the paid download for this resume.", 400));
+    }
+
+    if (resume.previewPdfUrl) {
+      return res.status(200).json(new ApiResponse(200, "Preview PDF already generated", {
+        resume,
+        alreadyGenerated: true,
+      }));
+    }
+
+    const pdfBuffer = await generatePreviewPdfBuffer(resume);
+    const { previewPdfUrl, previewPdfPublicId } = await uploadPreviewPdf(pdfBuffer, resume._id);
+
+    resume.previewPdfUrl = previewPdfUrl;
+    resume.previewPdfPublicId = previewPdfPublicId;
+    resume.previewPdfGeneratedAt = new Date();
+    await resume.save();
+
+    res.status(200).json(new ApiResponse(200, "Preview PDF generated", { resume }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const applyResumeImport = async (req, res, next) => {
+  try {
+    const resume = await Resume.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
+
+    if (!resume) {
+      return next(new ApiError("Resume not found.", 404));
+    }
+
+    if (resume.status === "paid") {
+      return next(new ApiError("Paid resumes cannot be overwritten by import.", 400));
+    }
+
+    const { importedData, importFileName = "" } = req.body;
+    const { data: normalized } = normalizeImportedResume(importedData);
+
+    resume.personal = normalized.personal;
+    resume.education = normalized.education;
+    resume.experience = normalized.experience;
+    resume.projects = normalized.projects;
+    resume.skills = normalized.skills;
+    resume.certifications = normalized.certifications;
+    resume.languages = normalized.languages;
+    resume.importMeta = {
+      source: "pdf",
+      importedAt: new Date(),
+      fileName: (importFileName || "").trim().slice(0, 200),
+    };
+    resume.lastEditedAt = new Date();
+    await resume.save();
+
+    res.status(200).json(new ApiResponse(200, "Import applied", { resume }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const downloadPreviewPdf = async (req, res, next) => {
+  try {
+    const resume = await Resume.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
+
+    if (!resume) {
+      return next(new ApiError("Resume not found.", 404));
+    }
+
+    if (!resume.previewPdfUrl) {
+      return next(new ApiError("Generate a free preview PDF first.", 404));
+    }
+
+    const fileName = buildResumeFileName(resume).replace(".pdf", "-preview.pdf");
+    const pdfSourceUrl = resume.previewPdfPublicId
+      ? getSignedDownloadUrl(resume.previewPdfPublicId)
+      : resume.previewPdfUrl;
+
+    const pdfResponse = await axios.get(pdfSourceUrl, {
+      responseType: "arraybuffer",
+      timeout: 30000,
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.setHeader("X-Download-Filename", fileName);
+    res.send(Buffer.from(pdfResponse.data));
+  } catch (error) {
+    if (error.response) {
+      return next(new ApiError("Failed to fetch preview PDF.", 502));
+    }
+    next(error);
+  }
+};
+
 module.exports = {
   createResume,
   getMyResumes,
@@ -255,4 +472,10 @@ module.exports = {
   downloadResume,
   regenerateResumePdfHandler,
   getPublicPricing,
+  getResumeTemplates,
+  getAtsScore,
+  clearStarterContent,
+  applyResumeImport,
+  generatePreviewPdf,
+  downloadPreviewPdf,
 };

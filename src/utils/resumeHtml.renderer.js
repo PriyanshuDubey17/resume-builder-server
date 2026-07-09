@@ -51,6 +51,14 @@ const formatSkillLabel = (skill) => {
   return skill.level ? `${name} (${escapeHtml(skill.level)})` : name;
 };
 
+const formatSkillBarLabel = (skill) => {
+  const name = escapeHtml(skill.name);
+  return skill.level ? `${name} · ${escapeHtml(skill.level)}` : name;
+};
+
+const renderHeaderSubheading = (title) =>
+  `<h3 class="header-subtitle">${escapeHtml(title)}</h3>`;
+
 const renderSummaryHtml = (personal, title = "Summary", titleClass = "") => {
   if (!personal?.summary) return "";
   return `<h2 class="${titleClass}">${title}</h2><p class="summary">${escapeHtml(personal.summary)}</p>`;
@@ -96,9 +104,13 @@ const renderEducationHtml = (education, title = "Education", titleClass = "", it
   return `<h2 class="${titleClass}">${title}</h2>${edu}`;
 };
 
-const renderSkillsInlineHtml = (skills, title = "Skills", titleClass = "") => {
+const renderSkillsInlineHtml = (skills, title = "Skills", titleClass = "", variant = "body") => {
   if (!skills?.length) return "";
-  return `<h2 class="${titleClass}">${title}</h2><p class="skills">${skills.map((s) => formatSkillLabel(s)).join(" · ")}</p>`;
+  const titleHtml =
+    variant === "header"
+      ? renderHeaderSubheading(title)
+      : `<h2 class="${titleClass}">${title}</h2>`;
+  return `${titleHtml}<p class="skills">${skills.map((s) => formatSkillLabel(s)).join(" · ")}</p>`;
 };
 
 const renderSkillsListHtml = (skills, title = "Skills", titleClass = "") => {
@@ -111,15 +123,25 @@ const renderSkillsPillsHtml = (skills, title = "Skills", titleClass = "") => {
   return `<h2 class="${titleClass}">${title}</h2><div class="pills">${skills.map((s) => `<span class="pill">${formatSkillLabel(s)}</span>`).join("")}</div>`;
 };
 
-const renderSkillsBarsHtml = (skills, title = "Skills", titleClass = "") => {
+const renderSkillsBarsHtml = (
+  skills,
+  title = "Skills",
+  titleClass = "",
+  { variant = "body", useDotSeparator = false } = {},
+) => {
   if (!skills?.length) return "";
+  const formatLabel = useDotSeparator ? formatSkillBarLabel : formatSkillLabel;
   const bars = skills.map((s) => `
     <div class="skill-bar">
-      <span>${formatSkillLabel(s)}</span>
+      <span>${formatLabel(s)}</span>
       <div class="bar"><div class="bar-fill" style="width:${getSkillLevelWidth(s.level)}"></div></div>
     </div>
   `).join("");
-  return `<h3 class="${titleClass}">${title}</h3>${bars}`;
+  const titleHtml =
+    variant === "header"
+      ? renderHeaderSubheading(title)
+      : `<h3 class="${titleClass}">${title}</h3>`;
+  return `${titleHtml}${bars}`;
 };
 
 const renderCertificationsHtml = (certifications, title = "Certifications", titleClass = "", itemClass = "cert-item") => {
@@ -133,26 +155,42 @@ const renderCertificationsHtml = (certifications, title = "Certifications", titl
   return `<h2 class="${titleClass}">${title}</h2>${items}`;
 };
 
-const renderLanguagesHtml = (languages, title = "Languages", titleClass = "") => {
+const renderLanguagesHtml = (languages, title = "Languages", titleClass = "", variant = "body") => {
   if (!languages?.length) return "";
   const text = languages.map((l) => `${escapeHtml(l.name)}${l.level ? ` (${escapeHtml(l.level)})` : ""}`).join(" · ");
-  return `<h2 class="${titleClass}">${title}</h2><p class="languages">${text}</p>`;
+  const titleHtml =
+    variant === "header"
+      ? renderHeaderSubheading(title)
+      : `<h2 class="${titleClass}">${title}</h2>`;
+  return `${titleHtml}<p class="languages">${text}</p>`;
 };
 
+const PRINT_RULES = `
+  .job, .edu-item, .cert-item, .proj-item { break-inside: avoid; page-break-inside: avoid; }
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  ul, ol { break-inside: avoid; page-break-inside: avoid; }
+  .pills { break-inside: avoid; page-break-inside: avoid; }
+  .header-band { break-inside: avoid; page-break-inside: avoid; }
+`;
+
+const withPrintRules = (styles) => `${styles}${PRINT_RULES}`;
+
+// Colors/fonts align with resume-builder-client/src/components/templates/templateTokens.js
 const TEMPLATE_STYLES = {
   "modern-professional": `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Inter, Arial, sans-serif; font-size: 11px; color: #18181B; }
-    .page { display: flex; min-height: 297mm; }
-    .sidebar { width: 32%; background: #27272A; color: #fff; padding: 28px 20px; }
-    .sidebar h1 { font-size: 20px; margin-bottom: 8px; }
-    .sidebar .contact { font-size: 10px; line-height: 1.6; margin-bottom: 20px; }
-    .sidebar h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 8px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px; }
-    .sidebar ul { list-style: none; }
-    .sidebar li { font-size: 10px; margin-bottom: 4px; }
-    .main { width: 68%; padding: 28px 24px; }
-    .main h2 { font-size: 12px; text-transform: uppercase; color: #3F3F46; border-bottom: 2px solid #3F3F46; padding-bottom: 4px; margin: 18px 0 10px; }
-    .main h2:first-child { margin-top: 0; }
+    .page { display: block; }
+    .header-band { display: flex; gap: 24px; background: #27272A; color: #fff; padding: 24px; }
+    .header-band .contact-col { flex: 1; min-width: 0; }
+    .header-band .skills-col { flex: 1; min-width: 0; }
+    .header-band h1 { font-size: 20px; margin-bottom: 8px; }
+    .header-band .contact { font-size: 10px; line-height: 1.6; }
+    .header-band .header-subtitle { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px; color: #fff; }
+    .header-band .skills, .header-band .languages { font-size: 10px; color: rgba(255,255,255,0.9); margin-bottom: 8px; line-height: 1.5; }
+    .body { padding: 24px; }
+    .body h2 { font-size: 12px; text-transform: uppercase; color: #3F3F46; border-bottom: 2px solid #3F3F46; padding-bottom: 4px; margin: 18px 0 10px; }
+    .body h2:first-child { margin-top: 0; }
     .summary { line-height: 1.5; color: #52525B; margin-bottom: 4px; }
     .job { margin-bottom: 14px; }
     .job-header { display: flex; justify-content: space-between; font-weight: bold; }
@@ -178,25 +216,26 @@ const TEMPLATE_STYLES = {
   `,
   "sidebar-accent": `
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; }
-    .page { display: flex; min-height: 297mm; }
-    .sidebar { width: 30%; background: #27272A; color: #fff; padding: 28px 18px; }
-    .sidebar h1 { font-size: 18px; margin-bottom: 12px; }
-    .sidebar .info { font-size: 10px; line-height: 1.7; margin-bottom: 16px; }
-    .sidebar h3 { font-size: 10px; text-transform: uppercase; margin: 14px 0 8px; }
+    body { font-family: Inter, Arial, sans-serif; font-size: 11px; color: #18181B; }
+    .page { display: block; }
+    .header-band { display: flex; gap: 24px; background: #27272A; color: #fff; padding: 20px; }
+    .header-band .contact-col { flex: 1; min-width: 0; }
+    .header-band .skills-col { flex: 1; min-width: 0; }
+    .header-band h1 { font-size: 18px; margin-bottom: 12px; }
+    .header-band .info { font-size: 10px; line-height: 1.7; }
+    .header-band .header-subtitle { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px; color: rgba(255,255,255,0.9); }
     .skill-bar { margin-bottom: 8px; }
-    .skill-bar span { font-size: 9px; display: block; margin-bottom: 2px; }
+    .skill-bar span { font-size: 10px; display: block; margin-bottom: 2px; }
     .bar { height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; }
     .bar-fill { height: 100%; background: #fff; border-radius: 2px; }
-    .cert-item { margin-bottom: 6px; font-size: 10px; }
-    .languages { font-size: 10px; margin-bottom: 8px; }
-    .main { width: 70%; padding: 28px 22px; color: #18181B; }
-    .main h2 { color: #3F3F46; font-size: 12px; text-transform: uppercase; margin: 16px 0 8px; }
+    .header-band .languages { font-size: 10px; margin-top: 16px; color: rgba(255,255,255,0.9); }
+    .body { padding: 28px 22px; }
+    .body h2 { color: #3F3F46; font-size: 12px; text-transform: uppercase; margin: 16px 0 8px; }
     .job { margin-bottom: 14px; padding-left: 12px; border-left: 2px solid #3F3F46; }
-    .job h3 { font-size: 11px; }
     ul { margin: 6px 0 0 14px; }
     li { margin-bottom: 3px; line-height: 1.4; }
     .meta { font-size: 10px; color: #71717A; }
+    .cert-item { margin-bottom: 6px; font-size: 10px; }
   `,
   "executive-classic": `
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -310,18 +349,22 @@ const renderModernProfessional = (resume) => {
 
   return `
     <div class="page">
-      <div class="sidebar">
-        <h1>${escapeHtml(personal.fullName)}</h1>
-        <div class="contact">
-          ${personal.email ? `${escapeHtml(personal.email)}<br/>` : ""}
-          ${personal.phone ? `${escapeHtml(personal.phone)}<br/>` : ""}
-          ${personal.location ? `${escapeHtml(personal.location)}<br/>` : ""}
-          ${links.join("<br/>")}
+      <div class="header-band">
+        <div class="contact-col">
+          <h1>${escapeHtml(personal.fullName)}</h1>
+          <div class="contact">
+            ${personal.email ? `${escapeHtml(personal.email)}<br/>` : ""}
+            ${personal.phone ? `${escapeHtml(personal.phone)}<br/>` : ""}
+            ${personal.location ? `${escapeHtml(personal.location)}<br/>` : ""}
+            ${links.join("<br/>")}
+          </div>
         </div>
-        ${renderSkillsListHtml(skills)}
-        ${renderLanguagesHtml(languages, "Languages", "sidebar h3")}
+        <div class="skills-col">
+          ${renderSkillsInlineHtml(skills, "Skills", "", "header")}
+          ${renderLanguagesHtml(languages, "Languages", "", "header")}
+        </div>
       </div>
-      <div class="main">
+      <div class="body">
         ${renderSummaryHtml(personal)}
         ${renderExperienceHtml(experience)}
         ${renderProjectsHtml(projects)}
@@ -388,23 +431,27 @@ const renderSidebarAccent = (resume) => {
 
   return `
     <div class="page">
-      <div class="sidebar">
-        <h1>${escapeHtml(personal.fullName)}</h1>
-        <div class="info">
-          ${personal.email ? `${escapeHtml(personal.email)}<br/>` : ""}
-          ${personal.phone ? `${escapeHtml(personal.phone)}<br/>` : ""}
-          ${personal.location ? `${escapeHtml(personal.location)}<br/>` : ""}
-          ${links.join("<br/>")}
+      <div class="header-band">
+        <div class="contact-col">
+          <h1>${escapeHtml(personal.fullName)}</h1>
+          <div class="info">
+            ${personal.email ? `${escapeHtml(personal.email)}<br/>` : ""}
+            ${personal.phone ? `${escapeHtml(personal.phone)}<br/>` : ""}
+            ${personal.location ? `${escapeHtml(personal.location)}<br/>` : ""}
+            ${links.join("<br/>")}
+          </div>
         </div>
-        ${renderSkillsBarsHtml(skills)}
-        ${renderLanguagesHtml(languages, "Languages", "sidebar h3")}
-        ${renderCertificationsHtml(certifications, "Certifications", "sidebar h3", "cert-item")}
+        <div class="skills-col">
+          ${renderSkillsBarsHtml(skills, "Skills", "", { variant: "header", useDotSeparator: true })}
+          ${renderLanguagesHtml(languages, "Languages", "", "header")}
+        </div>
       </div>
-      <div class="main">
-        ${renderSummaryHtml(personal, "About")}
+      <div class="body">
+        ${renderSummaryHtml(personal, "Summary")}
         ${renderExperienceHtml(experience, "Experience", "", "job")}
         ${renderProjectsHtml(projects, "Projects", "", "job")}
         ${renderEducationHtml(education, "Education", "", "job")}
+        ${renderCertificationsHtml(certifications, "Certifications", "", "job")}
       </div>
     </div>
   `;
@@ -574,7 +621,7 @@ const renderResumeBody = (resume) => {
 };
 
 const renderResumeHtml = (resume, showWatermark = true) => {
-  const styles = TEMPLATE_STYLES[resume.templateSlug] || TEMPLATE_STYLES["modern-professional"];
+  const styles = withPrintRules(TEMPLATE_STYLES[resume.templateSlug] || TEMPLATE_STYLES["modern-professional"]);
   const body = renderResumeBody(resume);
   const watermarkTiles = showWatermark
     ? Array.from({ length: 16 }, () => `
@@ -603,6 +650,7 @@ const renderResumeHtml = (resume, showWatermark = true) => {
   </style></head><body>${body}${watermark}</body></html>`;
 };
 
-const getTemplateStyles = (slug) => TEMPLATE_STYLES[slug] || TEMPLATE_STYLES["modern-professional"];
+const getTemplateStyles = (slug) =>
+  withPrintRules(TEMPLATE_STYLES[slug] || TEMPLATE_STYLES["modern-professional"]);
 
 module.exports = { renderResumeHtml, getTemplateStyles, escapeHtml };

@@ -81,6 +81,10 @@ const sanitizeResumeData = (data) => {
     sanitized.jobDescription = sanitizeText(sanitized.jobDescription);
   }
 
+  if (sanitized.importedData && typeof sanitized.importedData === "object") {
+    sanitized.importedData = sanitizeResumeData(sanitized.importedData);
+  }
+
   return sanitized;
 };
 

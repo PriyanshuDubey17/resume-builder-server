@@ -150,9 +150,26 @@ const resumeSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    previewPdfUrl: {
+      type: String,
+      default: null,
+    },
+    previewPdfPublicId: {
+      type: String,
+      default: null,
+    },
+    previewPdfGeneratedAt: {
+      type: Date,
+      default: null,
+    },
     lastEditedAt: {
       type: Date,
       default: Date.now,
+    },
+    importMeta: {
+      source: { type: String, default: null },
+      importedAt: { type: Date, default: null },
+      fileName: { type: String, default: "" },
     },
   },
   { timestamps: true },
