@@ -17,6 +17,7 @@ const {
   applyResumeImport,
   generatePreviewPdf,
   downloadPreviewPdf,
+  renderPreviewPdf,
 } = require("../controllers/resume.controller");
 
 const {
@@ -76,6 +77,7 @@ router.post("/resumes/:id/clear-starter", clearStarterContent);
 router.post("/resumes/:id/apply-import", validate(applyImportSchema), applyResumeImport);
 router.get("/resumes/:id/download", downloadResume);
 router.post("/resumes/:id/regenerate-pdf", regenerateResumePdfHandler);
+router.get("/resumes/:id/preview-pdf/render", previewPdfLimiter, renderPreviewPdf);
 router.post(
   "/resumes/:id/preview-pdf",
   previewPdfLimiter,

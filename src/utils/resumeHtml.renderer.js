@@ -168,10 +168,13 @@ const renderLanguagesHtml = (languages, title = "Languages", titleClass = "", va
 const PRINT_RULES = `
   .job, .edu-item, .cert-item, .proj-item { break-inside: avoid; page-break-inside: avoid; }
   h2, h3 { break-after: avoid; page-break-after: avoid; }
-  ul, ol { break-inside: avoid; page-break-inside: avoid; }
+  .job li { orphans: 2; widows: 2; }
   .pills { break-inside: avoid; page-break-inside: avoid; }
   .header-band { break-inside: avoid; page-break-inside: avoid; }
 `;
+
+const INTER_FONT_LINK =
+  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />';
 
 const withPrintRules = (styles) => `${styles}${PRINT_RULES}`;
 
@@ -184,7 +187,7 @@ const TEMPLATE_STYLES = {
     .header-band { display: flex; gap: 24px; background: #27272A; color: #fff; padding: 24px; }
     .header-band .contact-col { flex: 1; min-width: 0; }
     .header-band .skills-col { flex: 1; min-width: 0; }
-    .header-band h1 { font-size: 20px; margin-bottom: 8px; }
+    .header-band h1 { font-size: 20px; margin-bottom: 12px; }
     .header-band .contact { font-size: 10px; line-height: 1.6; }
     .header-band .header-subtitle { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px; color: #fff; }
     .header-band .skills, .header-band .languages { font-size: 10px; color: rgba(255,255,255,0.9); margin-bottom: 8px; line-height: 1.5; }
@@ -229,7 +232,7 @@ const TEMPLATE_STYLES = {
     .bar { height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; }
     .bar-fill { height: 100%; background: #fff; border-radius: 2px; }
     .header-band .languages { font-size: 10px; margin-top: 16px; color: rgba(255,255,255,0.9); }
-    .body { padding: 28px 22px; }
+    .body { padding: 24px; }
     .body h2 { color: #3F3F46; font-size: 12px; text-transform: uppercase; margin: 16px 0 8px; }
     .job { margin-bottom: 14px; padding-left: 12px; border-left: 2px solid #3F3F46; }
     ul { margin: 6px 0 0 14px; }
@@ -644,7 +647,7 @@ const renderResumeHtml = (resume, showWatermark = true) => {
     </div>
   ` : "";
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>${styles}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${INTER_FONT_LINK}<style>${styles}
     @page { size: A4; margin: 0; }
     body { margin: 0; }
   </style></head><body>${body}${watermark}</body></html>`;

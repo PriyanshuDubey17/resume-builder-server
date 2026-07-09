@@ -11,7 +11,7 @@ const { renderResumeHtml } = require("../utils/resumeHtml.renderer");
 const { getSignedDownloadUrl } = require("../utils/cloudinary");
 const { buildStarterResumeContent } = require("../constants/starterResumeContent");
 const { normalizeImportedResume } = require("../utils/import/normalizeImportedResume");
-const { isPdfStale, regenerateResumePdf, generatePreviewPdfBuffer, uploadPreviewPdf } = require("../utils/pdf.service");
+const { isPdfStale, isPreviewPdfStale, regenerateResumePdf, regeneratePreviewPdf, generatePreviewPdfBuffer, uploadPreviewPdf, generatePdfBuffer } = require("../utils/pdf.service");
 const { analyzeResumeAts } = require("../utils/ats/atsAnalyzer");
 const { RESUME_TEMPLATES } = require("../constants/resumeTemplates");
 
@@ -365,22 +365,38 @@ const generatePreviewPdf = async (req, res, next) => {
       return next(new ApiError("Use the paid download for this resume.", 400));
     }
 
-    if (resume.previewPdfUrl) {
+    if (resume.previewPdfUrl && !isPreviewPdfStale(resume)) {
       return res.status(200).json(new ApiResponse(200, "Preview PDF already generated", {
         resume,
         alreadyGenerated: true,
       }));
     }
 
-    const pdfBuffer = await generatePreviewPdfBuffer(resume);
-    const { previewPdfUrl, previewPdfPublicId } = await uploadPreviewPdf(pdfBuffer, resume._id);
+    const updatedResume = await regeneratePreviewPdf(resume);
 
-    resume.previewPdfUrl = previewPdfUrl;
-    resume.previewPdfPublicId = previewPdfPublicId;
-    resume.previewPdfGeneratedAt = new Date();
-    await resume.save();
+    res.status(200).json(new ApiResponse(200, "Preview PDF generated", { resume: updatedResume }));
+  } catch (error) {
+    next(error);
+  }
+};
 
-    res.status(200).json(new ApiResponse(200, "Preview PDF generated", { resume }));
+const renderPreviewPdf = async (req, res, next) => {
+  try {
+    const resume = await Resume.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
+
+    if (!resume) {
+      return next(new ApiError("Resume not found.", 404));
+    }
+
+    const showWatermark = req.query.watermark !== "false";
+    const pdfBuffer = await generatePdfBuffer(resume, showWatermark);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(pdfBuffer);
   } catch (error) {
     next(error);
   }
@@ -440,6 +456,10 @@ const downloadPreviewPdf = async (req, res, next) => {
       return next(new ApiError("Generate a free preview PDF first.", 404));
     }
 
+    if (isPreviewPdfStale(resume)) {
+      await regeneratePreviewPdf(resume);
+    }
+
     const fileName = buildResumeFileName(resume).replace(".pdf", "-preview.pdf");
     const pdfSourceUrl = resume.previewPdfPublicId
       ? getSignedDownloadUrl(resume.previewPdfPublicId)
@@ -477,5 +497,6 @@ module.exports = {
   clearStarterContent,
   applyResumeImport,
   generatePreviewPdf,
+  renderPreviewPdf,
   downloadPreviewPdf,
 };

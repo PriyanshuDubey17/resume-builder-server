@@ -2,6 +2,8 @@ const { cloudinary } = require("./cloudinary");
 const { renderResumeHtml } = require("./resumeHtml.renderer");
 
 const PDF_UPLOAD_FOLDER = "resume-builder/pdfs";
+const A4_WIDTH_PX = 595;
+const A4_HEIGHT_PX = 842;
 
 const isServerless = () => Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
@@ -50,11 +52,17 @@ const generatePdfBuffer = async (resume, showWatermark = false) => {
 
   try {
     const page = await browser.newPage();
+    await page.setViewport({
+      width: A4_WIDTH_PX,
+      height: A4_HEIGHT_PX,
+      deviceScaleFactor: 1,
+    });
     try {
       await page.setContent(html, { waitUntil: "networkidle0", timeout: 15000 });
     } catch {
       await page.setContent(html, { waitUntil: "domcontentloaded" });
     }
+    await page.evaluate(() => document.fonts.ready);
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
@@ -104,6 +112,9 @@ const generateAndUploadResumePdf = async (resume) => {
 const isPdfStale = (resume) =>
   Boolean(resume.pdfGeneratedAt && resume.lastEditedAt > resume.pdfGeneratedAt);
 
+const isPreviewPdfStale = (resume) =>
+  Boolean(resume.previewPdfGeneratedAt && resume.lastEditedAt > resume.previewPdfGeneratedAt);
+
 const regenerateResumePdf = async (resume) => {
   const { pdfUrl, pdfPublicId, pdfGeneratedAt } = await generateAndUploadResumePdf(resume);
   resume.pdfUrl = pdfUrl;
@@ -138,11 +149,23 @@ const uploadPreviewPdf = (pdfBuffer, resumeId) => {
 
 const generatePreviewPdfBuffer = async (resume) => generatePdfBuffer(resume, true);
 
+const regeneratePreviewPdf = async (resume) => {
+  const pdfBuffer = await generatePreviewPdfBuffer(resume);
+  const { previewPdfUrl, previewPdfPublicId } = await uploadPreviewPdf(pdfBuffer, resume._id);
+  resume.previewPdfUrl = previewPdfUrl;
+  resume.previewPdfPublicId = previewPdfPublicId;
+  resume.previewPdfGeneratedAt = new Date();
+  await resume.save();
+  return resume;
+};
+
 module.exports = {
   generatePdfBuffer,
   generateAndUploadResumePdf,
   isPdfStale,
+  isPreviewPdfStale,
   regenerateResumePdf,
+  regeneratePreviewPdf,
   generatePreviewPdfBuffer,
   uploadPreviewPdf,
 };
