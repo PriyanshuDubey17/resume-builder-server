@@ -54,13 +54,13 @@ const adminRoutes = require("./src/routes/admin.routes");
 const profileRoutes = require("./src/routes/profile.routes");
 const { authGeneralLimiter } = require("./src/middlewares/rateLimiter");
 
-app.use("/api/admin-login", authGeneralLimiter, adminLoginRoutes);
-app.use("/api/auth", authGeneralLimiter, customerAuthRoutes);
-app.use("/api", resumeRoutes);
-app.use("/api/payments", paymentRoutes);
-app.use("/api/admin", adminRoutes);
+// app.use("/api/admin-login", authGeneralLimiter, adminLoginRoutes);
+// app.use("/api/auth", authGeneralLimiter, customerAuthRoutes);
+// app.use("/api", resumeRoutes);
+// app.use("/api/payments", paymentRoutes);
+// app.use("/api/admin", adminRoutes);
 
-app.use("/api/admin/profile", profileRoutes);
+// app.use("/api/admin/profile", profileRoutes);
 app.use("/",(req, res)=>{
   res.json({ message: "Welcome to the API" });
 });
